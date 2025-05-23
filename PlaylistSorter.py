@@ -69,6 +69,22 @@ SORT_DIRECTIONS = {
     '2': ('descending', True)
 }
 
+def indent(elem, level=0):
+    """
+    In-place pretty-print formatter for XML elements.
+    """
+    i = "\n" + level*"  "
+    if len(elem):
+        if not elem.text or not elem.text.strip():
+            elem.text = i + "  "
+        for child in elem:
+            indent(child, level+1)
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+    else:
+        if level and (not elem.tail or not elem.tail.strip()):
+            elem.tail = i
+
 def load_library_tree(path):
     tree = ET.parse(path)
     root = tree.getroot()
@@ -288,7 +304,6 @@ def main():
                           attr)
         if val is None:
             print(f"⚠️ '{info.get('Name')}' missing '{attr}', placing last.")
-            # Use minimal for dates, infinity for numbers/strings
             val = datetime.date.min if attr=='release_date' else float('inf')
         print(f"  {info.get('Name')}: {attr} = {val}")
         scored.append((tid, val))
@@ -300,7 +315,7 @@ def main():
         print(f"  {i}. {tracks_map[tid]['Name']} ({attr}={v})")
 
     sorted_ids = [tid for tid, _ in sorted_pairs]
-    set_playlist_items(plist_dict, sorted_ids)
+    set_playlist_items(pl_dict, sorted_ids)
 
     # update playlist name
     for idx, elem in enumerate(list(plist_dict)):
@@ -314,7 +329,17 @@ def main():
                         break
             break
 
+    # ——— Prompt before overwrite and pretty-print XML ———
     out = args.output or os.path.splitext(args.input)[0] + '_sorted.xml'
+    if os.path.exists(out):
+        resp = input(f"\nOutput file '{out}' already exists. Overwrite? [y/N]: ").strip().lower()
+        if resp != 'y':
+            print("✗ Aborting; file not overwritten.")
+            sys.exit(0)
+
+    # apply pretty-print indentation
+    indent(tree.getroot())
+
     tree.write(out, encoding='utf-8', xml_declaration=True)
     print(f"\n✓ '{pname}' sorted by '{attr}' ({dir_name}) saved to {out}")
 
