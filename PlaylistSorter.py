@@ -8,6 +8,24 @@ falls back to Spotify lookup or Librosa analysis. Writes a new XML file with the
 """
 import sys
 import subprocess
+import os
+import argparse
+import xml.etree.ElementTree as ET
+import datetime
+import urllib.parse
+import warnings
+
+# suppress librosa/audioread and numpy warnings
+warnings.filterwarnings("ignore", message="PySoundFile failed.*")
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+from mutagen import File as MutagenFile
+import numpy as np
+import librosa
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOauthError
+from spotipy.exceptions import SpotifyException
 
 # --- Dependency check ---
 def check_dependencies():
@@ -28,25 +46,6 @@ def check_dependencies():
             sys.exit(1)
 
 check_dependencies()
-
-import os
-import argparse
-import xml.etree.ElementTree as ET
-import datetime
-import urllib.parse
-import warnings
-
-# suppress librosa/audioread and numpy warnings
-warnings.filterwarnings("ignore", message="PySoundFile failed.*")
-warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-import numpy as np
-import librosa
-from mutagen import File as MutagenFile
-import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOauthError
-from spotipy.exceptions import SpotifyException
 
 # --- Embed your Spotify API credentials here ---
 CLIENT_ID = 'XXXXXXXX'
@@ -128,11 +127,14 @@ def get_playlist_track_ids(pl_dict):
     return []
 
 def set_playlist_items(pl_dict, sorted_ids):
+    # pl_dict is the <dict> for a single playlist
     for idx, elem in enumerate(list(pl_dict)):
         if elem.tag == 'key' and elem.text == 'Playlist Items':
-            arr = list(pl_dict)[idx+1]
+            arr = list(pl_dict)[idx + 1]
+            # clear out old entries
             for child in list(arr):
                 arr.remove(child)
+            # re-add in sorted order
             for tid in sorted_ids:
                 d = ET.SubElement(arr, 'dict')
                 ET.SubElement(d, 'key').text = 'Track ID'
@@ -288,7 +290,6 @@ def main():
                           attr)
         if val is None:
             print(f"⚠️ '{info.get('Name')}' missing '{attr}', placing last.")
-            # Use minimal for dates, infinity for numbers/strings
             val = datetime.date.min if attr=='release_date' else float('inf')
         print(f"  {info.get('Name')}: {attr} = {val}")
         scored.append((tid, val))
@@ -300,7 +301,7 @@ def main():
         print(f"  {i}. {tracks_map[tid]['Name']} ({attr}={v})")
 
     sorted_ids = [tid for tid, _ in sorted_pairs]
-    set_playlist_items(plist_dict, sorted_ids)
+    set_playlist_items(pl_dict, sorted_ids)
 
     # update playlist name
     for idx, elem in enumerate(list(plist_dict)):
